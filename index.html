@@ -4,126 +4,443 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Logs AdOps - Adseleto</title>
-    
-    <!-- React e dependências -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Configuração do Tailwind -->
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    animation: {
-                        'spin': 'spin 1s linear infinite',
-                    }
-                }
-            }
-        }
-    </script>
-    
-    <!-- Meta tags para SEO e compartilhamento -->
-    <meta name="description" content="Sistema de logs para equipe AdOps da Adseleto - Registro e acompanhamento de alterações em sites">
-    <meta name="keywords" content="AdOps, logs, sistema, adseleto, google sheets">
-    <meta name="author" content="Adseleto">
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234F46E5'><path d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/></svg>">
-    
-    <!-- Estilos customizados -->
-    <style>
-        /* Loading animation */
-        .loading-pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: .5;
-            }
-        }
-        
-        /* Smooth transitions */
-        * {
-            transition: all 0.2s ease-in-out;
-        }
-        
-        /* Scrollbar customization */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-        
-        /* Mobile responsiveness */
-        @media (max-width: 768px) {
-            .table-container {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-        }
-    </style>
 </head>
-<body class="bg-gray-50 font-sans antialiased">
-    <!-- Container principal -->
-    <div id="root">
-        <!-- Loading inicial -->
-        <div class="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div class="text-center">
-                <div class="loading-pulse text-4xl mb-4">📊</div>
-                <h1 class="text-2xl font-bold text-gray-900 mb-2">Sistema AdOps</h1>
-                <p class="text-gray-600 mb-4">Carregando sistema...</p>
-                <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Scripts -->
-    <script src="./components/icons.js"></script>
-    <script src="./utils/config.js"></script>
-    <script src="./services/sheetsService.js"></script>
-    <script type="text/babel" src="./components/AdOpsApp.js"></script>
-    
-    <!-- Script de inicialização -->
+<body>
+    <div id="root"></div>
+
     <script type="text/babel">
-        // Renderizar aplicação
-        const { createRoot } = ReactDOM;
-        const root = createRoot(document.getElementById('root'));
-        root.render(<AdOpsLogApp />);
-    </script>
-    
-    <!-- Service Worker para cache (opcional) -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then((registration) => {
-                        console.log('SW registrado com sucesso:', registration);
-                    })
-                    .catch((registrationError) => {
-                        console.log('SW falhou ao registrar:', registrationError);
-                    });
+        const { useState, useEffect } = React;
+
+        // URL do Google Sheets - ALTERE AQUI
+        const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzMZhijsFYjGc8dVFVfJbVHt1vFOtmkrN6nGR650CheOOdkYEHP63roCbPDt8eYC1297A/exec';
+
+        const AdOpsApp = () => {
+            const [logs, setLogs] = useState([]);
+            const [showForm, setShowForm] = useState(false);
+            const [currentAdOps, setCurrentAdOps] = useState('');
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterStatus, setFilterStatus] = useState('all');
+            
+            const [formData, setFormData] = useState({
+                alteracoes: '',
+                pais: '',
+                site: '',
+                owner: '',
+                status: 'In progress',
+                notes: '',
+                gamLink: '',
+                analysisSheet: ''
             });
-        }
+
+            // Carregar dados do localStorage
+            useEffect(() => {
+                const savedLogs = localStorage.getItem('adopsLogs');
+                const savedAdOps = localStorage.getItem('currentAdOps');
+                if (savedLogs) setLogs(JSON.parse(savedLogs));
+                if (savedAdOps) setCurrentAdOps(savedAdOps);
+            }, []);
+
+            // Salvar dados
+            useEffect(() => {
+                localStorage.setItem('adopsLogs', JSON.stringify(logs));
+            }, [logs]);
+
+            useEffect(() => {
+                localStorage.setItem('currentAdOps', currentAdOps);
+            }, [currentAdOps]);
+
+            // Submit formulário
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!formData.site || !formData.owner || !formData.alteracoes) {
+                    alert('Preencha Site, Owner e Tipo de Alteração!');
+                    return;
+                }
+
+                const newLog = {
+                    id: Date.now(),
+                    ...formData,
+                    createdAt: new Date().toLocaleString('pt-BR')
+                };
+
+                setLogs([newLog, ...logs]);
+                setFormData({
+                    alteracoes: '',
+                    pais: '',
+                    site: '',
+                    owner: '',
+                    status: 'In progress',
+                    notes: '',
+                    gamLink: '',
+                    analysisSheet: ''
+                });
+                setShowForm(false);
+                alert('✅ Log salvo com sucesso!');
+            };
+
+            // Deletar log
+            const handleDelete = (id) => {
+                if (confirm('Tem certeza que deseja excluir?')) {
+                    setLogs(logs.filter(log => log.id !== id));
+                }
+            };
+
+            // Filtrar logs
+            const filteredLogs = logs.filter(log => {
+                const matchesStatus = filterStatus === 'all' || log.status === filterStatus;
+                const matchesSearch = log.site.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                   log.alteracoes.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                   log.owner.toLowerCase().includes(searchTerm.toLowerCase());
+                const matchesAdOps = !currentAdOps || log.owner.toLowerCase().includes(currentAdOps.toLowerCase());
+                return matchesStatus && matchesSearch && matchesAdOps;
+            });
+
+            // Estatísticas
+            const totalLogs = currentAdOps ? 
+                logs.filter(log => log.owner.toLowerCase().includes(currentAdOps.toLowerCase())).length : 
+                logs.length;
+            const completedLogs = currentAdOps ?
+                logs.filter(log => log.owner.toLowerCase().includes(currentAdOps.toLowerCase()) && 
+                          (log.status === 'Completed' || log.status === 'Analyzed')).length :
+                logs.filter(log => log.status === 'Completed' || log.status === 'Analyzed').length;
+
+            const progressPercentage = totalLogs > 0 ? Math.round((completedLogs / totalLogs) * 100) : 0;
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <div className="max-w-7xl mx-auto px-4 py-8">
+                        {/* Header */}
+                        <div className="mb-8">
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">Sistema de Logs AdOps</h1>
+                            <p className="text-gray-600">Registro de alterações e validações - Adseleto</p>
+                        </div>
+
+                        {/* Filtro AdOps */}
+                        <div className="mb-6 bg-white p-4 rounded-lg shadow">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Filtrar por AdOps (apenas na sua máquina)
+                            </label>
+                            <div className="flex gap-4">
+                                <input
+                                    type="text"
+                                    placeholder="Digite seu nome para ver apenas seus logs..."
+                                    value={currentAdOps}
+                                    onChange={(e) => setCurrentAdOps(e.target.value)}
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                />
+                                {currentAdOps && (
+                                    <button
+                                        onClick={() => setCurrentAdOps('')}
+                                        className="text-red-500 hover:text-red-700 px-3"
+                                    >
+                                        Limpar
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Dashboard */}
+                        <div className="mb-6 bg-white p-6 rounded-lg shadow">
+                            <h3 className="text-lg font-semibold mb-4">
+                                Progresso dos Testes {currentAdOps && `- ${currentAdOps}`}
+                            </h3>
+                            
+                            <div className="mb-4">
+                                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                                    <span>Testes Completados</span>
+                                    <span>{completedLogs}/{totalLogs} ({progressPercentage}%)</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-3">
+                                    <div 
+                                        className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                                        style={{ width: `${progressPercentage}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-4">
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-gray-900">{totalLogs}</div>
+                                    <div className="text-sm text-gray-600">Total</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-yellow-600">
+                                        {logs.filter(log => log.status === 'In progress').length}
+                                    </div>
+                                    <div className="text-sm text-gray-600">Em Progresso</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-green-600">{completedLogs}</div>
+                                    <div className="text-sm text-gray-600">Completados</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-red-600">
+                                        {logs.filter(log => log.status === 'Blocked').length}
+                                    </div>
+                                    <div className="text-sm text-gray-600">Bloqueados</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Barra de ações */}
+                        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+                            <button
+                                onClick={() => setShowForm(!showForm)}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                            >
+                                ➕ Novo Log
+                            </button>
+
+                            <div className="flex flex-1 gap-4">
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por site, alteração ou owner..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                />
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="all">Todos Status</option>
+                                    <option value="In progress">Em Progresso</option>
+                                    <option value="Completed">Completado</option>
+                                    <option value="Analyzed">Analisado</option>
+                                    <option value="Blocked">Bloqueado</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Formulário */}
+                        {showForm && (
+                            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                                <h2 className="text-xl font-semibold mb-4">Novo Log</h2>
+                                <form onSubmit={handleSubmit}>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Site *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={formData.site}
+                                                onChange={(e) => setFormData({...formData, site: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                placeholder="exemplo.com"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Owner (AdOps) *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={formData.owner}
+                                                onChange={(e) => setFormData({...formData, owner: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                placeholder="Seu nome"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
+                                            <select
+                                                value={formData.pais}
+                                                onChange={(e) => setFormData({...formData, pais: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">Selecione...</option>
+                                                <option value="Brasil">Brasil</option>
+                                                <option value="EUA">EUA</option>
+                                                <option value="México">México</option>
+                                                <option value="Argentina">Argentina</option>
+                                                <option value="Chile">Chile</option>
+                                                <option value="Colômbia">Colômbia</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                            <select
+                                                value={formData.status}
+                                                onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="In progress">Em Progresso</option>
+                                                <option value="Completed">Completado</option>
+                                                <option value="Analyzed">Analisado</option>
+                                                <option value="Blocked">Bloqueado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Tipo de Alteração *
+                                        </label>
+                                        <select
+                                            required
+                                            value={formData.alteracoes}
+                                            onChange={(e) => setFormData({...formData, alteracoes: e.target.value})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">Selecione...</option>
+                                            <option value="Bloqueio de Criativos">Bloqueio de Criativos</option>
+                                            <option value="Bloqueio de Categoria">Bloqueio de Categoria</option>
+                                            <option value="Implementação de Tags">Implementação de Tags</option>
+                                            <option value="Configuração Header Bidding">Configuração Header Bidding</option>
+                                            <option value="Configuração AdSense">Configuração AdSense</option>
+                                            <option value="Implementação GTM">Implementação GTM</option>
+                                            <option value="Debug e Correções">Debug e Correções</option>
+                                            <option value="Otimização Mobile">Otimização Mobile</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Link do GAM</label>
+                                        <input
+                                            type="url"
+                                            value={formData.gamLink}
+                                            onChange={(e) => setFormData({...formData, gamLink: e.target.value})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="https://admanager.google.com/..."
+                                        />
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Planilha de Análise</label>
+                                        <input
+                                            type="url"
+                                            value={formData.analysisSheet}
+                                            onChange={(e) => setFormData({...formData, analysisSheet: e.target.value})}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="https://docs.google.com/spreadsheets/d/..."
+                                        />
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                                        <textarea
+                                            value={formData.notes}
+                                            onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                                            rows="3"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Observações..."
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="submit"
+                                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                                        >
+                                            Salvar Log
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowForm(false)}
+                                            className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        )}
+
+                        {/* Lista de Logs */}
+                        <div className="bg-white rounded-lg shadow overflow-hidden">
+                            {filteredLogs.length === 0 ? (
+                                <div className="p-12 text-center">
+                                    <div className="text-6xl mb-4">📋</div>
+                                    <div className="text-gray-400 text-lg mb-2">Nenhum log encontrado</div>
+                                    <p className="text-gray-500">Comece criando seu primeiro log!</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alterações</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Site</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GAM</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Análise</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {filteredLogs.map((log) => (
+                                                <tr key={log.id} className="hover:bg-gray-50">
+                                                    <td className="px-6 py-4 text-sm">
+                                                        <div className="font-medium text-gray-900">{log.alteracoes}</div>
+                                                        {log.notes && <div className="text-gray-500 text-xs mt-1">{log.notes.substring(0, 50)}...</div>}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{log.site}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-900">{log.owner}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-2 py-1 text-xs rounded-full ${
+                                                            log.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                                                            log.status === 'Analyzed' ? 'bg-blue-100 text-blue-800' :
+                                                            log.status === 'Blocked' ? 'bg-red-100 text-red-800' :
+                                                            'bg-yellow-100 text-yellow-800'
+                                                        }`}>
+                                                            {log.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {log.gamLink ? (
+                                                            <a href={log.gamLink} target="_blank" rel="noopener noreferrer"
+                                                               className="text-blue-600 hover:text-blue-800 text-xs bg-blue-50 px-2 py-1 rounded">
+                                                                Ver GAM
+                                                            </a>
+                                                        ) : (
+                                                            <span className="text-gray-400 text-xs">Sem GAM</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {log.analysisSheet ? (
+                                                            <a href={log.analysisSheet} target="_blank" rel="noopener noreferrer"
+                                                               className="text-green-600 hover:text-green-800 text-xs bg-green-50 px-2 py-1 rounded">
+                                                                Ver Análise
+                                                            </a>
+                                                        ) : (
+                                                            <span className="text-gray-400 text-xs">Sem análise</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <button
+                                                            onClick={() => handleDelete(log.id)}
+                                                            className="text-red-600 hover:text-red-800 text-xs"
+                                                        >
+                                                            🗑️ Excluir
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Renderizar a aplicação
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AdOpsApp />);
     </script>
 </body>
 </html>
