@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Logs AdOps - Adseleto</title>
+    
+    <!-- React e dependências -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configuração do Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'spin': 'spin 1s linear infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Meta tags para SEO e compartilhamento -->
+    <meta name="description" content="Sistema de logs para equipe AdOps da Adseleto - Registro e acompanhamento de alterações em sites">
+    <meta name="keywords" content="AdOps, logs, sistema, adseleto, google sheets">
+    <meta name="author" content="Adseleto">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234F46E5'><path d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/></svg>">
+    
+    <!-- Estilos customizados -->
+    <style>
+        /* Loading animation */
+        .loading-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .5;
+            }
+        }
+        
+        /* Smooth transitions */
+        * {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        /* Scrollbar customization */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans antialiased">
+    <!-- Container principal -->
+    <div id="root">
+        <!-- Loading inicial -->
+        <div class="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div class="text-center">
+                <div class="loading-pulse text-4xl mb-4">📊</div>
+                <h1 class="text-2xl font-bold text-gray-900 mb-2">Sistema AdOps</h1>
+                <p class="text-gray-600 mb-4">Carregando sistema...</p>
+                <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="./components/icons.js"></script>
+    <script src="./utils/config.js"></script>
+    <script src="./services/sheetsService.js"></script>
+    <script type="text/babel" src="./components/AdOpsApp.js"></script>
+    
+    <!-- Script de inicialização -->
+    <script type="text/babel">
+        // Renderizar aplicação
+        const { createRoot } = ReactDOM;
+        const root = createRoot(document.getElementById('root'));
+        root.render(<AdOpsLogApp />);
+    </script>
+    
+    <!-- Service Worker para cache (opcional) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => {
+                        console.log('SW registrado com sucesso:', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW falhou ao registrar:', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
