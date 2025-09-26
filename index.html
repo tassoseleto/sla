@@ -161,169 +161,261 @@
     </div>
 
     <script>
-        let logs = JSON.parse(localStorage.getItem('adopsLogs') || '[]');
-        
-        function showForm() {
-            document.getElementById('logForm').classList.remove('hidden');
-        }
-        
-        function hideForm() {
-            document.getElementById('logForm').classList.add('hidden');
-            // Limpar formulário
-            document.querySelector('form').reset();
-        }
-        
-        function saveLog(event) {
-            event.preventDefault();
-            
-            const newLog = {
-                id: Date.now(),
-                site: document.getElementById('site').value,
-                owner: document.getElementById('owner').value,
-                pais: document.getElementById('pais').value,
-                status: document.getElementById('status').value,
-                alteracoes: document.getElementById('alteracoes').value,
-                notes: document.getElementById('notes').value,
-                createdAt: new Date().toLocaleString('pt-BR')
-            };
-            
-            logs.unshift(newLog);
-            localStorage.setItem('adopsLogs', JSON.stringify(logs));
-            
-            hideForm();
-            renderLogs();
-            updateStats();
-            alert('Log salvo com sucesso!');
-        }
-        
-        function deleteLog(id) {
-            if (confirm('Tem certeza que deseja excluir?')) {
-                logs = logs.filter(log => log.id !== id);
-                localStorage.setItem('adopsLogs', JSON.stringify(logs));
-                renderLogs();
-                updateStats();
-            }
-        }
-        
-        function clearFilter() {
-            document.getElementById('filterAdOps').value = '';
-            localStorage.removeItem('currentAdOps');
-            filterLogs();
-        }
-        
-        function filterLogs() {
-            const adopsFilter = document.getElementById('filterAdOps').value.toLowerCase();
-            const searchFilter = document.getElementById('searchInput').value.toLowerCase();
-            
-            localStorage.setItem('currentAdOps', adopsFilter);
-            
-            const filtered = logs.filter(log => {
-                const matchesAdOps = !adopsFilter || log.owner.toLowerCase().includes(adopsFilter);
-                const matchesSearch = !searchFilter || 
-                    log.site.toLowerCase().includes(searchFilter) ||
-                    log.alteracoes.toLowerCase().includes(searchFilter) ||
-                    log.owner.toLowerCase().includes(searchFilter);
-                return matchesAdOps && matchesSearch;
+    let logs = JSON.parse(localStorage.getItem('adopsLogs') || '[]');
+    
+    // URL do seu Google Apps Script
+    const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzMZhijsFYjGc8dVFVfJbVHt1vFOtmkrN6nGR650CheOOdkYEHP63roCbPDt8eYC1297A/exec';
+    
+    // Carregar dados do Google Sheets
+    async function loadFromSheets() {
+        try {
+            console.log('Carregando dados do Google Sheets...');
+            const response = await fetch(SHEETS_URL + '?action=get', {
+                method: 'GET',
+                mode: 'cors'
             });
             
-            renderFilteredLogs(filtered);
-            updateStatsForFiltered(filtered);
-        }
-        
-        function renderLogs() {
-            filterLogs();
-        }
-        
-        function renderFilteredLogs(logsToRender) {
-            const container = document.getElementById('logsContainer');
+            if (!response.ok) throw new Error('Erro na conexão');
             
-            if (logsToRender.length === 0) {
-                container.innerHTML = `
-                    <div class="p-12 text-center">
-                        <div class="text-6xl mb-4">📋</div>
-                        <div class="text-gray-400 text-lg mb-2">Nenhum log encontrado</div>
-                        <p class="text-gray-500">Comece criando seu primeiro log!</p>
-                    </div>
-                `;
-                return;
-            }
+            const data = await response.json();
+            console.log('Dados recebidos:', data);
             
-            const tableHtml = `
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alterações</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Site</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            ${logsToRender.map(log => `
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-6 py-4 text-sm">
-                                        <div class="font-medium text-gray-900">${log.alteracoes}</div>
-                                        ${log.notes ? `<div class="text-gray-500 text-xs mt-1">${log.notes.substring(0, 50)}${log.notes.length > 50 ? '...' : ''}</div>` : ''}
-                                    </td>
-                                    <td class="px-6 py-4 text-sm font-medium text-gray-900">${log.site}</td>
-                                    <td class="px-6 py-4 text-sm text-gray-900">${log.owner}</td>
-                                    <td class="px-6 py-4">
-                                        <span class="px-2 py-1 text-xs rounded-full ${getStatusColor(log.status)}">
-                                            ${log.status}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 text-sm text-gray-500">${log.createdAt}</td>
-                                    <td class="px-6 py-4">
-                                        <button onclick="deleteLog(${log.id})" class="text-red-600 hover:text-red-800 text-xs">
-                                            🗑️ Excluir
-                                        </button>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+            // Processar dados vindos do Sheets
+            const processedLogs = data.map(row => ({
+                id: row.id || Date.now(),
+                site: row.site || '',
+                owner: row.owner || '',
+                pais: row.pais || row.país || '',
+                status: row.status || 'In progress',
+                alteracoes: row.alteracoes || row.alterações || '',
+                notes: row.notes || '',
+                createdAt: row.createdat || row.datahora || new Date().toLocaleString('pt-BR')
+            })).filter(log => log.site); // Remove linhas vazias
+            
+            logs = processedLogs;
+            localStorage.setItem('adopsLogs', JSON.stringify(logs));
+            renderLogs();
+            updateStats();
+            
+            console.log('✅ Dados carregados do Google Sheets');
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar do Google Sheets:', error);
+            console.log('📱 Usando dados locais');
+        }
+    }
+    
+    // Salvar no Google Sheets
+    async function saveToSheets(logData) {
+        try {
+            console.log('Enviando para Google Sheets:', logData);
+            
+            const response = await fetch(SHEETS_URL, {
+                method: 'POST',
+                mode: 'cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'add',
+                    ...logData
+                })
+            });
+            
+            if (!response.ok) throw new Error('Erro ao salvar');
+            
+            const result = await response.json();
+            console.log('✅ Salvo no Google Sheets:', result);
+            
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Erro ao salvar no Google Sheets:', error);
+            console.log('📱 Dados salvos apenas localmente');
+            return false;
+        }
+    }
+    
+    function showForm() {
+        document.getElementById('logForm').classList.remove('hidden');
+    }
+    
+    function hideForm() {
+        document.getElementById('logForm').classList.add('hidden');
+        document.querySelector('form').reset();
+    }
+    
+    async function saveLog(event) {
+        event.preventDefault();
+        
+        const newLog = {
+            id: Date.now(),
+            site: document.getElementById('site').value,
+            owner: document.getElementById('owner').value,
+            pais: document.getElementById('pais').value,
+            status: document.getElementById('status').value,
+            alteracoes: document.getElementById('alteracoes').value,
+            notes: document.getElementById('notes').value,
+            createdAt: new Date().toLocaleString('pt-BR')
+        };
+        
+        // Salvar localmente primeiro
+        logs.unshift(newLog);
+        localStorage.setItem('adopsLogs', JSON.stringify(logs));
+        
+        // Tentar salvar no Google Sheets
+        const savedOnline = await saveToSheets(newLog);
+        
+        hideForm();
+        renderLogs();
+        updateStats();
+        
+        if (savedOnline) {
+            alert('✅ Log salvo com sucesso no Google Sheets!');
+        } else {
+            alert('⚠️ Log salvo localmente. Será sincronizado quando a conexão melhorar.');
+        }
+    }
+    
+    function deleteLog(id) {
+        if (confirm('Tem certeza que deseja excluir?')) {
+            logs = logs.filter(log => log.id !== id);
+            localStorage.setItem('adopsLogs', JSON.stringify(logs));
+            renderLogs();
+            updateStats();
+        }
+    }
+    
+    function clearFilter() {
+        document.getElementById('filterAdOps').value = '';
+        localStorage.removeItem('currentAdOps');
+        filterLogs();
+    }
+    
+    function filterLogs() {
+        const adopsFilter = document.getElementById('filterAdOps').value.toLowerCase();
+        const searchFilter = document.getElementById('searchInput').value.toLowerCase();
+        
+        localStorage.setItem('currentAdOps', adopsFilter);
+        
+        const filtered = logs.filter(log => {
+            const matchesAdOps = !adopsFilter || log.owner.toLowerCase().includes(adopsFilter);
+            const matchesSearch = !searchFilter || 
+                log.site.toLowerCase().includes(searchFilter) ||
+                log.alteracoes.toLowerCase().includes(searchFilter) ||
+                log.owner.toLowerCase().includes(searchFilter);
+            return matchesAdOps && matchesSearch;
+        });
+        
+        renderFilteredLogs(filtered);
+        updateStatsForFiltered(filtered);
+    }
+    
+    function renderLogs() {
+        filterLogs();
+    }
+    
+    function renderFilteredLogs(logsToRender) {
+        const container = document.getElementById('logsContainer');
+        
+        if (logsToRender.length === 0) {
+            container.innerHTML = `
+                <div class="p-12 text-center">
+                    <div class="text-6xl mb-4">📋</div>
+                    <div class="text-gray-400 text-lg mb-2">Nenhum log encontrado</div>
+                    <p class="text-gray-500">Comece criando seu primeiro log!</p>
                 </div>
             `;
-            
-            container.innerHTML = tableHtml;
+            return;
         }
         
-        function getStatusColor(status) {
-            switch(status) {
-                case 'Completed': return 'bg-green-100 text-green-800';
-                case 'Analyzed': return 'bg-blue-100 text-blue-800';
-                case 'Blocked': return 'bg-red-100 text-red-800';
-                default: return 'bg-yellow-100 text-yellow-800';
-            }
-        }
+        const tableHtml = `
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alterações</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Site</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${logsToRender.map(log => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 text-sm">
+                                    <div class="font-medium text-gray-900">${log.alteracoes}</div>
+                                    ${log.notes ? `<div class="text-gray-500 text-xs mt-1">${log.notes.substring(0, 50)}${log.notes.length > 50 ? '...' : ''}</div>` : ''}
+                                </td>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900">${log.site}</td>
+                                <td class="px-6 py-4 text-sm text-gray-900">${log.owner}</td>
+                                <td class="px-6 py-4">
+                                    <span class="px-2 py-1 text-xs rounded-full ${getStatusColor(log.status)}">
+                                        ${log.status}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500">${log.createdAt}</td>
+                                <td class="px-6 py-4">
+                                    <button onclick="deleteLog(${log.id})" class="text-red-600 hover:text-red-800 text-xs">
+                                        🗑️ Excluir
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
         
-        function updateStats() {
-            const adopsFilter = document.getElementById('filterAdOps').value.toLowerCase();
-            const filteredLogs = adopsFilter ? 
-                logs.filter(log => log.owner.toLowerCase().includes(adopsFilter)) : 
-                logs;
-            updateStatsForFiltered(filteredLogs);
+        container.innerHTML = tableHtml;
+    }
+    
+    function getStatusColor(status) {
+        switch(status) {
+            case 'Completed': return 'bg-green-100 text-green-800';
+            case 'Analyzed': return 'bg-blue-100 text-blue-800';
+            case 'Blocked': return 'bg-red-100 text-red-800';
+            default: return 'bg-yellow-100 text-yellow-800';
         }
+    }
+    
+    function updateStats() {
+        const adopsFilter = document.getElementById('filterAdOps').value.toLowerCase();
+        const filteredLogs = adopsFilter ? 
+            logs.filter(log => log.owner.toLowerCase().includes(adopsFilter)) : 
+            logs;
+        updateStatsForFiltered(filteredLogs);
+    }
+    
+    function updateStatsForFiltered(filteredLogs) {
+        const total = filteredLogs.length;
+        const completed = filteredLogs.filter(log => log.status === 'Completed' || log.status === 'Analyzed').length;
+        const inProgress = filteredLogs.filter(log => log.status === 'In progress').length;
+        const blocked = filteredLogs.filter(log => log.status === 'Blocked').length;
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
         
-        function updateStatsForFiltered(filteredLogs) {
-            const total = filteredLogs.length;
-            const completed = filteredLogs.filter(log => log.status === 'Completed' || log.status === 'Analyzed').length;
-            const inProgress = filteredLogs.filter(log => log.status === 'In progress').length;
-            const blocked = filteredLogs.filter(log => log.status === 'Blocked').length;
-            const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-            
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('completedCount').textContent = completed;
-            document.getElementById('progressCount').textContent = inProgress;
-            document.getElementById('blockedCount').textContent = blocked;
-            document.getElementById('progressText').textContent = `${completed}/${total} (${percentage}%)`;
-            document.getElementById('progressBar').style.width = `${percentage}%`;
-        }
-        
-        // Inicializar
+        document.getElementById('totalCount').textContent = total;
+        document.getElementById('completedCount').textContent = completed;
+        document.getElementById('progressCount').textContent = inProgress;
+        document.getElementById('blockedCount').textContent = blocked;
+        document.getElementById('progressText').textContent = `${completed}/${total} (${percentage}%)`;
+        document.getElementById('progressBar').style.width = `${percentage}%`;
+    }
+    
+    // Adicionar botão para sincronizar manualmente
+    function addSyncButton() {
+        const buttonsDiv = document.querySelector('.mb-6.flex.gap-4');
+        const syncButton = document.createElement('button');
+        syncButton.innerHTML = '🔄 Sincronizar';
+        syncButton.className = 'bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700';
+        syncButton.onclick = loadFromSheets;
+        buttonsDiv.appendChild(syncButton);
+    }
+    
+    // Inicializar
+    document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('filterAdOps').addEventListener('input', filterLogs);
         
         // Carregar dados salvos
@@ -332,8 +424,15 @@
             document.getElementById('filterAdOps').value = savedAdOps;
         }
         
+        // Adicionar botão de sincronização
+        addSyncButton();
+        
+        // Carregar dados do Google Sheets
+        loadFromSheets();
+        
         renderLogs();
         updateStats();
-    </script>
+    });
+</script>
 </body>
 </html>
